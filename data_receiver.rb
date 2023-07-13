@@ -67,7 +67,7 @@ end
 # start framework thread: 
 
 rails_listener_thread = Thread.new do 
-  listener = TCPServer.open('localhost', 9010)
+  listener = TCPServer.open('0.0.0.0', 9010)
   puts "starting framework listener"
 
   loop do
