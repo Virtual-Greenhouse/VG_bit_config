@@ -4,11 +4,13 @@ require 'json'
 
 class GreenHouseData
   attr_reader :counter, :data
+  attr_accessor :pending_command
   MAX_SIZE = 4
 
   def initialize
     @counter = 0
     @data = []
+    @pending_command = "waiting"
   end
 
   def store_data(data_to_store)
@@ -41,13 +43,13 @@ data_hash = Concurrent::Map.new
 
 green_house_recv_thread = Thread.new do
   loop do
-    client = server.accept
-    response = client.gets
+    ruby_client = server.accept
+    response = ruby_client.gets
     puts(response)
     parsed_data = JSON.parse(response)
     id = parsed_data["id"]
     # puts response
-    # client.puts("sup dawg") #send a single number to execute an action -> the potato/python will have functions to determine what to do
+    # ruby_client.puts("sup dawg") #send a single number to execute an action -> the potato/python will have functions to determine what to do
   
     if data_hash.fetch(id, nil).nil?
       data_hash[id] = GreenHouseData.new
@@ -55,8 +57,17 @@ green_house_recv_thread = Thread.new do
     end
   
     data_hash[id].store_data(parsed_data)
-  
-    client.close
+
+    command = data_hash[id].pending_command
+    puts command
+    if command != "waiting"
+      ruby_client.puts(command)
+      puts "send command #{command}"
+      data_hash[id].pending_command = "waiting"
+      
+    end
+
+    ruby_client.close
     puts data_hash[id].get_data
     puts
   end
@@ -72,24 +83,24 @@ rails_listener_thread = Thread.new do
 
   loop do
     client = listener.accept
-    response = client.gets
+    response = client.gets.chomp
     puts("Recvd cmd: #{response}")
     #TODO:
     # in rails, make a hash containing the id and command
     # then parse the response here, which will be a JSON and convert back into a hash again
 
     id = "green1"
-    if response == "0"
-      puts "hello"
-    end
     case response 
-    when "0\n"
-      puts "received command 0" # gets data
+    when "get_info"
+      puts "received command get_info" # gets data
       json_response = data_hash[id].get_data.to_json #will this crash calling .to_json on an array?yes
-      #data_hash[id].get_latest_data.to_json
       client.puts(json_response)
-    when "1"
-      puts "received command 1"
+    when "light_on"
+      puts "received command light on"
+      data_hash[id].pending_command = "light_on"
+    when "light_off"
+      puts "received command light_off"
+      data_hash[id].pending_command = "light_off"
     end
   end
 end
